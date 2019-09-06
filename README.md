@@ -37,11 +37,11 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/integralist/go-elasticache/elasticache"
+	elasticache "github.com/SpotIM/go-elasticache"
 )
 
 func main() {
-	mc, err := elasticache.New()
+	mc, err := elasticache.New(`config-endpoint`)
 	if err != nil {
 		log.Fatalf("Error: %s", err.Error())
 	}
