@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/bradfitz/gomemcache/memcache"
-	"github.com/integralist/go-findroot/find"
 )
 
 // Node is a single ElastiCache node
@@ -23,67 +22,25 @@ type Node struct {
 	Port int
 }
 
-// Item embeds the memcache client's type of the same name
-type Item memcache.Item
-
-// Client embeds the memcache client so we can hide those details away
-type Client struct {
-	*memcache.Client
-}
-
-// Set abstracts the memcache client details away,
-// by copying over the values provided by the user into the Set method,
-// as coercing the custom Item type to the required memcache.Item type isn't possible.
-// Downside is if memcache client fields ever change, it'll introduce a break
-func (c *Client) Set(item *Item) error {
-	return c.Client.Set(&memcache.Item{
-		Key:        item.Key,
-		Value:      item.Value,
-		Expiration: item.Expiration,
-	})
-}
-
-var logger *log.Logger
-
-func init() {
-	logger = log.New(os.Stdout, "go-elasticache: ", log.Ldate|log.Ltime|log.Lshortfile)
-
-	if env := os.Getenv("APP_ENV"); env == "test" {
-		root, err := find.Repo()
-		if err != nil {
-			log.Printf("Repo Error: %s", err.Error())
-		}
-
-		path := fmt.Sprintf("%s/go-elasticache.log", root.Path)
-
-		file, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0666)
-		if err != nil {
-			log.Printf("Open File Error: %s", err.Error())
-		}
-
-		logger = log.New(file, "go-elasticache: ", log.Ldate|log.Ltime|log.Lshortfile)
-	}
-}
-
 // New returns an instance of the memcache client
-func New() (*Client, error) {
-	urls, err := clusterNodes()
+func New(dsn string) (*memcache.Client, error) {
+	urls, err := clusterNodes(dsn)
 	if err != nil {
-		return &Client{Client: memcache.New()}, err
+		return memcache.New(), err
 	}
 
-	return &Client{Client: memcache.New(urls...)}, nil
+	return memcache.New(urls...), nil
 }
 
-func clusterNodes() ([]string, error) {
-	endpoint, err := elasticache()
+func clusterNodes(dsn string) ([]string, error) {
+	endpoint, err := elasticache(dsn)
 	if err != nil {
 		return nil, err
 	}
 
 	conn, err := net.Dial("tcp", endpoint)
 	if err != nil {
-		logger.Printf("Socket Dial (%s): %s", endpoint, err.Error())
+		log.Printf("Socket Dial (%s): %s", endpoint, err.Error())
 		return nil, err
 	}
 	defer conn.Close()
@@ -104,16 +61,16 @@ func clusterNodes() ([]string, error) {
 	return urls, nil
 }
 
-func elasticache() (string, error) {
-	var endpoint string
-
-	endpoint = os.Getenv("ELASTICACHE_ENDPOINT")
-	if len(endpoint) == 0 {
-		logger.Println("ElastiCache endpoint not set")
+func elasticache(dsn string) (string, error) {
+	if len(dsn) == 0 {
+		dsn = os.Getenv("ELASTICACHE_ENDPOINT")
+	}
+	if len(dsn) == 0 {
+		log.Println("ElastiCache endpoint not set")
 		return "", errors.New("ElastiCache endpoint not set")
 	}
 
-	return endpoint, nil
+	return dsn, nil
 }
 
 func parseNodes(conn io.Reader) (string, error) {
@@ -134,11 +91,11 @@ func parseNodes(conn io.Reader) (string, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		logger.Println("Scanner: ", err.Error())
+		log.Println("Scanner: ", err.Error())
 		return "", err
 	}
 
-	logger.Println("ElastiCache nodes found: ", response)
+	log.Println("ElastiCache nodes found: ", response)
 	return response, nil
 }
 
@@ -153,7 +110,7 @@ func parseURLs(response string) ([]string, error) {
 
 		port, err := strconv.Atoi(fields[2])
 		if err != nil {
-			logger.Println("Integer conversion: ", err.Error())
+			log.Println("Integer conversion: ", err.Error())
 			return nil, err
 		}
 
@@ -161,7 +118,7 @@ func parseURLs(response string) ([]string, error) {
 		nodes = append(nodes, node)
 		urls = append(urls, node.URL)
 
-		logger.Printf("Host: %s, IP: %s, Port: %d, URL: %s", node.Host, node.IP, node.Port, node.URL)
+		log.Printf("Host: %s, IP: %s, Port: %d, URL: %s", node.Host, node.IP, node.Port, node.URL)
 	}
 
 	return urls, nil

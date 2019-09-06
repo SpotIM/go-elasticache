@@ -9,7 +9,7 @@ import (
 func TestElastiCacheEndpoint(t *testing.T) {
 	expectation := "foo"
 	os.Setenv("ELASTICACHE_ENDPOINT", expectation)
-	response, _ := elasticache()
+	response, _ := elasticache(expectation)
 
 	if response != expectation {
 		t.Errorf("The response '%s' didn't match the expectation '%s'", response, expectation)
