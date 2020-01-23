@@ -24,6 +24,9 @@ type Node struct {
 
 // New returns an instance of the memcache client
 func New(dsn string) (*memcache.Client, error) {
+	if os.Getenv(`GO_ENV`) == `test`{
+		return memcache.New(dsn), nil
+	}
 	urls, err := clusterNodes(dsn)
 	if err != nil {
 		return memcache.New(), err
